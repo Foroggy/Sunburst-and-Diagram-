@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NASA Sunburst Visualizer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      text-align: center;
+    }
+    #file-input {
+      margin-bottom: 20px;
+    }
+    #filters {
+      margin-bottom: 10px;
+    }
+    select {
+      margin: 0 10px;
+      padding: 4px;
+    }
+    #download-buttons {
+      margin-bottom: 20px;
+    }
+    button {
+      margin: 0 5px;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+    #path-box {
+      height: 40px;
+      margin-bottom: 20px;
+      font-size: 18px;
+      font-weight: bold;
+      border: 2px solid #ccc;
+      padding: 10px;
+      width: 80%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #container {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+    #legend {
+      min-width: 250px;
+      text-align: left;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border: 1px solid #ccc;
+    }
+    .legend-labels {
+      display: flex;
+      flex-direction: column;
+    }
+    .legend-function {
+      font-weight: bold;
+    }
+    .legend-centers {
+      font-size: 12px;
+      color: #555;
+    }
+    svg {
+      width: 600px;
+      height: 600px;
+    }
+    #data-table {
+      margin-top: 40px;
+      border-collapse: collapse;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #data-table th, #data-table td {
+      border: 1px solid #ccc;
+      padding: 8px 16px;
+      text-align: left;
+    }
+    #data-table td.surface-cell {
+      font-weight: bold;
+      color: white;
+    }
+  </style>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <input type="file" id="file-input" accept=".csv" />
+
+  <div id="filters">
+    <label>Filter by Surface Function:</label>
+    <select id="surfaceFilter" multiple></select>
+    <label>Filter by Center:</label>
+    <select id="centerFilter" multiple></select>
+  </div>
+  <div id="download-buttons">
+    <button onclick="downloadSunburstPNG()">📷 Download Sunburst + Legend</button>
+    <button onclick="downloadTablePNG()">📷 Download Table</button>
+    <button onclick="downloadCSV()">📄 Download Table CSV</button>
+  </div>
+  <div id="path-box">Hover over a section to see its path</div>
+  <div id="container">
+    <div id="legend"></div>
+    <div id="chart"></div>
+  </div>
+  <div id="table-container"></div>
+
+  <script>
+    function downloadSunburstPNG() {
+      html2canvas(document.querySelector("#container")).then(canvas => {
+        let link = document.createElement('a');
+        link.download = 'sunburst_legend.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    function downloadTablePNG() {
+      html2canvas(document.querySelector("#data-table")).then(canvas => {
+        let link = document.createElement('a');
+        link.download = 'sunburst_table.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    }
+
+    function downloadCSV() {
+      const rows = document.querySelectorAll("#data-table tr");
+      let csv = Array.from(rows).map(row =>
+        Array.from(row.cells).map(cell => '"' + cell.innerText + '"').join(',')
+      ).join("\n");
+      let blob = new Blob([csv], { type: 'text/csv' });
+      let link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = "sunburst_flattened_table.csv";
+      link.click();
+    }
+  </script>
+</body>
+</html>
