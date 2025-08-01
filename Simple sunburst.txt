@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NASA Sunburst</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      padding: 20px;
+    }
+
+    #file-input {
+      margin-bottom: 20px;
+    }
+
+    #path-box {
+      height: 40px;
+      margin-bottom: 20px;
+      font-size: 18px;
+      font-weight: bold;
+      border: 2px solid #ccc;
+      padding: 10px;
+      width: 80%;
+      text-align: center;
+    }
+
+    #container {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 40px;
+      width: 100%;
+    }
+
+    #legend {
+      min-width: 250px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border: 1px solid #ccc;
+    }
+
+    .legend-labels {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .legend-function {
+      font-weight: bold;
+    }
+
+    .legend-centers {
+      font-size: 12px;
+      color: #555;
+    }
+
+    svg {
+      width: 600px;
+      height: 600px;
+    }
+  </style>
+</head>
+<body>
+  <input type="file" id="file-input" accept=".csv" />
+  <div id="path-box">Hover over a section to see its path</div>
+  <div id="container">
+    <div id="legend"></div>
+    <div id="chart"></div>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const colors = d3.schemeCategory10;
+    const unallocatedColor = "#000000";
+    const width = 600;
+    const radius = width / 2;
+
+    let surfaceColorMap = {};
+    let surfaceCentersMap = new Map();
+    const colorScale = d3.scaleOrdinal(colors);
+
+    const partition = d3.partition().size([2 * Math.PI, radius]);
+    const arc = d3.arc()
+      .startAngle(d => d.x0)
+      .endAngle(d => d.x1)
+      .innerRadius(d => d.y0)
+      .outerRadius(d => d.y1);
+
+    document.getElementById('file-input').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const csvText = event.target.result;
+        const parsed = parseFlexibleCSV(csvText);
+        clearOldChart();
+        drawSunburst(parsed);
+        buildLegend();
+      };
+      reader.readAsText(file);
+    });
+
+    function clearOldChart() {
+      d3.select("#chart").html("");
+      d3.select("#legend").html("");
+      surfaceColorMap = {};
+      surfaceCentersMap.clear();
+    }
+
+    function parseFlexibleCSV(data) {
+      const rows = d3.csvParseRows(data);
+      const root = { name: "root", children: [] };
+
+      rows.forEach(row => {
+        if (row.length === 0) return;
+        const surface = row[0].trim();
+        const centers = [];
+        const useCases = [];
+
+        for (let i = 1; i < row.length; i++) {
+          const val = row[i]?.trim();
+          if (!val) continue;
+          if (val.startsWith("UC")) useCases.push(val);
+          else centers.push(val);
+        }
+
+        const centerList = centers.length > 0 ? centers : ["Unallocated"];
+        const hasUnallocated = centerList.includes("Unallocated");
+        const color = hasUnallocated ? unallocatedColor : colorScale(surface);
+
+        surfaceColorMap[surface] = color;
+        surfaceCentersMap.set(surface, centerList);
+
+        const funcNode = {
+          name: surface,
+          children: [
+            {
+              name: centerList.join(", "),
+              children: useCases.map(u => ({ name: u }))
+            }
+          ]
+        };
+
+        root.children.push(funcNode);
+      });
+
+      root.children.sort((a, b) => {
+        const getCount = node => node.children[0]?.children?.length || 0;
+        return getCount(b) - getCount(a);
+      });
+
+      return root;
+    }
+
+    function drawSunburst(rootData) {
+      const root = d3.hierarchy(rootData)
+        .sum(d => d.children ? 0 : 1)
+        .sort((a, b) => b.value - a.value);
+
+      partition(root);
+
+      const svg = d3.select("#chart").append("svg")
+        .attr("viewBox", [0, 0, width, width])
+        .append("g")
+        .attr("transform", `translate(${radius},${radius})`);
+
+      const pathBox = d3.select("#path-box");
+
+      svg.selectAll("path")
+        .data(root.descendants().filter(d => d.depth))
+        .join("path")
+        .attr("d", arc)
+        .attr("fill", d => {
+          const ancestors = d.ancestors().reverse();
+          const surface = ancestors[1]?.data.name;
+          const color = surfaceColorMap[surface] || "#ccc";
+          return color;
+        })
+        .on("mouseover", (event, d) => {
+          const path = d.ancestors().reverse().slice(1).map(d => d.data.name).join(" > ");
+          pathBox.text(path);
+        });
+    }
+
+    function buildLegend() {
+      const legend = d3.select("#legend");
+      for (const [surface, color] of Object.entries(surfaceColorMap)) {
+        const centers = surfaceCentersMap.get(surface)?.join(", ") || "Unallocated";
+        const item = legend.append("div").attr("class", "legend-item");
+        item.append("div")
+          .attr("class", "legend-color")
+          .style("background-color", color);
+        const labels = item.append("div").attr("class", "legend-labels");
+        labels.append("div").attr("class", "legend-function").text(surface);
+        labels.append("div").attr("class", "legend-centers").text(centers);
+      }
+    }
+  </script>
+</body>
+</html>
